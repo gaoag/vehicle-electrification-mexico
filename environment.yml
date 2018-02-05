@@ -1,0 +1,52 @@
+name: ds
+channels:
+ - bokeh/label/dev
+ - conda-forge
+ - ioam/label/dev
+ - ioam
+ - scitools/label/dev
+
+dependencies:
+ - attrs
+ - bokeh
+ - cartopy
+ - colorcet
+ - dask
+ - datashader
+ - dill
+ - distributed
+ - geoviews
+ - ioam::holoviews>=1.8.3
+ - iris
+ - jupyter
+ - krb5
+ - matplotlib
+ - networkx
+ - numba
+ - numpy
+ - pandas
+ - param>=1.5.1
+ - paramnb
+ - pyproj
+ - pytables
+ - pytest
+ - python=3.6
+ - rasterio
+ - requests
+ - scikit-image
+ - scipy
+ - shapely
+ - statsmodels
+ - tblib
+ - gbrener::xarray>=0.9.6 # For xarray.open_rasterio()
+ - yaml
+ - fastparquet
+#- fastcache # Only required for Python2, for the dashboard/
+ - snappy
+ - cffi # required for python-snappy
+ - python-snappy
+ - jupyter_dashboards
+ - pip:
+   - cachey
+   - webargs
+

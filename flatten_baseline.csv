@@ -1,0 +1,59 @@
+from pandas.io.json import json_normalize
+from scipy import interpolate
+import json
+import numpy as np
+import pandas as pd
+import csv
+import time
+from tqdm import tqdm
+
+movesFiles = ['record_results_baseline.csv', 'record_results_bus.csv', 'record_results_taxi.csv', 'record_results_LDV.csv']
+
+for file in movesFiles:
+    pollutantFile = open(file, mode='r')
+    pollutantReader = csv.DictReader(pollutantFile)
+    interpolationData = {'speed': [], 'CO2-Atm':[], 'CO2-Eq':[], 'CO':[], 'NOx':[], 'VOC':[], 'SO2':[], 'NH3':[], 'PM10':[], 'PM2.5':[]}
+
+    for row in pollutantReader:
+        for key, value in row.items():
+            interpolationData[key].append(float(value))
+
+
+
+
+    outputFileName = 'emissions_' + file.split('_')[2]
+    outputFile = open(outputFileName, mode='w')
+    writeHeader = csv.writer(outputFile)
+    writeHeader.writerow(['x','y','speed','length','level','delay','type','uuid','startTimeMillis','CO2-Atm','CO2-Eq','CO','NOx','VOC','SO2','NH3','PM10','PM2.5'])
+    outputFile.close()
+    #create interpolation functions for each pollutant
+    interpolationFunctions = {}
+    interpolationFunctions['CO2-Atm'] = interpolate.interp1d(interpolationData['speed'], interpolationData['CO2-Atm'])
+    interpolationFunctions['CO2-Eq'] = interpolate.interp1d(interpolationData['speed'], interpolationData['CO2-Eq'])
+    interpolationFunctions['CO'] = interpolate.interp1d(interpolationData['speed'], interpolationData['CO'])
+    interpolationFunctions['NOx'] = interpolate.interp1d(interpolationData['speed'], interpolationData['NOx'])
+    interpolationFunctions['VOC'] = interpolate.interp1d(interpolationData['speed'], interpolationData['VOC'])
+    interpolationFunctions['SO2'] = interpolate.interp1d(interpolationData['speed'], interpolationData['SO2'])
+    interpolationFunctions['NH3'] = interpolate.interp1d(interpolationData['speed'], interpolationData['NH3'])
+    interpolationFunctions['PM10'] = interpolate.interp1d(interpolationData['speed'], interpolationData['PM10'])
+    interpolationFunctions['PM2.5'] = interpolate.interp1d(interpolationData['speed'], interpolationData['PM2.5'])
+
+    #now, retrieve dataframes - this reads in one chunk??? /figure out how exactly the data is structured...
+    bad_rows = []
+    reader = pd.read_csv('cdmx_dump.csv', index_col='datetime', chunksize=1)
+    for chunk in tqdm(reader):
+        upper_json = json.loads(chunk['data'][0])
+
+        try:
+            df = json_normalize(upper_json['jams'], 'line', ['speed','length','level','delay','type','uuid'])
+        except KeyError:
+            continue
+
+        df = df.drop_duplicates(['uuid'])
+
+        df.loc[:, 'startTimeMillis'] = upper_json['startTimeMillis']
+        df.loc[df['speed'] == 0, 'speed'] = 0.1
+        for pollutant, function in interpolationFunctions.items(): #scale pollutant based on speed by the length
+            # scale by volume of cars (find # of cars that can fit on the road, and divide that by how long it takes to get through the road to get # of cars/hr)
+            df[pollutant] = (function(df['speed']))*df['length']*df['speed']*0.00310686368
+            df.to_csv(path_or_buf=outputFileName, mode='a', index=False, header=False)

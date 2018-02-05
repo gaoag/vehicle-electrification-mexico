@@ -1,0 +1,43 @@
+from pandas.io.json import json_normalize
+from scipy import interpolate
+import json
+import pandas as pd
+import csv
+import time
+
+pollutantList = ['CO', 'NOX', 'VOC', 'SO2', 'NH3', 'PM10', 'PM2.5']
+
+#record data to interpolate
+pollutantFile = open('record_results_final.csv', mode='r')
+pollutantReader = csv.DictReader(pollutantFile)
+interpolationData = {'Speed': [i for i in range(0, 81)], 'CO':[], 'NOX':[], 'VOC':[], 'SO2':[], 'NH3':[], 'PM10':[], 'PM2.5':[]}
+for row in pollutantReader:
+    for pollutant in pollutantList:
+        interpolationData[pollutant].append(row[pollutant])
+
+
+outputFile = open('flattened_with_emissions.csv', mode='a')
+
+#create interpolation functions for each pollutant
+interpolationFunctions = {}
+for pollutant in pollutantList:
+    interpolationFunctions[pollutant] = interpolate.interp1d(interpolationData['Speed'], interpolationData[pollutant])
+
+#now, retrieve dataframes - this reads in one chunk??? /figure out how exactly the data is structured...
+reader = pd.read_csv('data.csv', index_col='datetime', chunksize = 1)
+for chunk in reader:
+
+    upper_json = json.loads(chunk['data'][0])
+    df = json_normalize(upper_json['jams'], 'line', ['speed',
+    												 'length',
+    												 'level',
+    												 'delay',
+    												 'type',
+    												 'uuid'])
+    df = df.drop_duplicates(['uuid'])
+
+    df.loc[:, 'startTimeMillis'] = upper_json['startTimeMillis']
+    for pollutant in pollutantList: #scale pollutant based on speed by the length
+        # scale by volume of cars (find # of cars that can fit on the road, and divide that by how long it takes to get through the road to get # of cars/hr)
+        df[pollutant] = (interpolationFunctions[pollutant](df['speed']))*(df['length']/1.60934)*((df['length']/6)*3)*(1/(df['length']*1000/df['speed']))
+    df.to_csv(outputFile, header=False)
